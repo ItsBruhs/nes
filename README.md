@@ -1,1 +1,1 @@
-# nes
+# Nes emulator
