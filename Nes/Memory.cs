@@ -1,3 +1,5 @@
+namespace Nes;
+
 public class Memory
 {
     public byte[] Raw;

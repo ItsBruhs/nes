@@ -1,4 +1,6 @@
-﻿var cmdArgs = Environment.GetCommandLineArgs();
+﻿using Nes;
+
+var cmdArgs = Environment.GetCommandLineArgs();
 
 if (cmdArgs.Length < 2)
 {
