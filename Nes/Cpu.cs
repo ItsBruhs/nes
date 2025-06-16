@@ -160,8 +160,9 @@ public class Cpu(Memory memory)
 
             case 0x85:
                 var staAddress = (ushort)Memory.Read(PC++);
+                var staValueAtAddress = Memory.Read(staAddress);
 
-                LogInstruction(currentPC, opcode, $"STA ${staAddress:X2} = {A:X2}", staAddress);
+                LogInstruction(currentPC, opcode, $"STA ${staAddress:X2} = {staValueAtAddress:X2}", staAddress);
 
                 Memory.Write(staAddress, A);
                 break;
