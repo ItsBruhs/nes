@@ -18,7 +18,14 @@ var memory = new Memory(bytes);
 var cpu = new Cpu(memory);
 cpu.Reset(0xC000);
 
-while (true)
+Console.WriteLine("Emulation started");
+
+try
 {
-    cpu.Step();
+    while (true)
+        cpu.Step();
+}
+finally
+{
+    File.WriteAllText("./instruction_log.txt", cpu.InstructionLog);
 }
