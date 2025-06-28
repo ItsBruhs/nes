@@ -423,6 +423,19 @@ public class Cpu(Memory memory)
         }
     }
 
+    public void TriggerNmi()
+    {
+        Push((byte)(PC >> 8));
+        Push((byte)(PC & 0xFF));
+        Push(P);
+
+        I = true; // Disable interrupts
+
+        ushort low = Memory.Read(0xFFFA);
+        ushort high = Memory.Read(0xFFFB);
+        PC = (ushort)(low | (high << 8));
+    }
+
     private AddressingResult ReadOperand(AddressingMode mode)
     {
         switch (mode)

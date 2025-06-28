@@ -14,19 +14,34 @@ var bytes = File.ReadAllBytes(filePath);
 
 Console.WriteLine($"Loading file: {filePath}");
 
-var memory = new Memory(bytes);
+var ppu = new Ppu();
+var memory = new Memory(bytes, ppu);
+ppu.ChrRom = memory.ChrRom;
 var cpu = new Cpu(memory);
-cpu.PrintLog = true;
+//cpu.PrintLog = true;
 cpu.Reset(/* 0xC000 */);
 
 Console.WriteLine("Emulation started");
 
-try
+var window = new NesWindow(ppu);
+
+var cpuThread = Task.Run(() =>
 {
     while (true)
+    {
         cpu.Step();
-}
-finally
-{
-    File.WriteAllText("./instruction_log.txt", cpu.InstructionLog);
-}
+
+        for (int i = 0; i < 3; i++)
+        {
+            ppu.Step();
+
+            if (ppu.NmiPending)
+            {
+                ppu.NmiPending = false;
+                cpu.TriggerNmi();
+            }
+        }
+    }
+});
+
+window.Run();

@@ -27,11 +27,12 @@ public class Memory
     // 4020–FFFF: Cartridge PRG ROM/RAM
     public byte[] Ram = new byte[2048];
 
-    private int read2002Counter = 0;
+    public Ppu Ppu;
 
-    public Memory(byte[] raw)
+    public Memory(byte[] raw, Ppu ppu)
     {
         Raw = raw;
+        Ppu = ppu;
 
         Console.WriteLine($"Prg rom size: {PrgRomSizeKb}KB");
         Console.WriteLine($"Chr rom size: {ChrRomSizeKb}KB");
@@ -85,35 +86,14 @@ public class Memory
     public byte Read(ushort address)
     {
         if (address < 0x2000)
-        {
             return Ram[address % 0x800];
-        }
 
-        // Simulate PPU
         if (address >= 0x2000 && address <= 0x3FFF)
-        {
-            ushort reg = (ushort)(address % 8);
-
-            switch (reg)
-            {
-                case 2: // PPUSTATUS
-                    read2002Counter++;
-
-                    // 0x80 for VBlank flag set
-                    if (read2002Counter > 5)
-                        return 0x80;
-                    else
-                        return 0x00;
-
-                default:
-                    return 0;
-            }
-        }
+            return Ppu.ReadRegister((ushort)(address % 8)); // $2000–$2007 mirrored
 
         if (address >= 0x8000)
         {
             var offset = address - 0x8000;
-
             if (PrgRom.Length == 0x4000)
                 offset %= 0x4000;
 
@@ -129,15 +109,13 @@ public class Memory
         {
             Ram[address % 0x800] = value;
         }
+        else if (address >= 0x2000 && address <= 0x3FFF)
+        {
+            Ppu.WriteRegister((ushort)(address % 8), value);
+        }
         else if (address >= 0x8000)
         {
-            var offset = address - 0x8000;
-
-            if (PrgRom.Length == 0x4000)
-                // Mirror 16 KB prg rom across 32 KB space
-                offset %= 0x4000;
-
-            PrgRom[offset] = value;
+            Console.WriteLine($"Attempted to write to prg rom @ {address:X4}");
         }
     }
 }
