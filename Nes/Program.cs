@@ -16,7 +16,8 @@ Console.WriteLine($"Loading file: {filePath}");
 
 var memory = new Memory(bytes);
 var cpu = new Cpu(memory);
-cpu.Reset(0xC000);
+cpu.PrintLog = true;
+cpu.Reset(/* 0xC000 */);
 
 Console.WriteLine("Emulation started");
 

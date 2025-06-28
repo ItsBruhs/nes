@@ -27,6 +27,8 @@ public class Memory
     // 4020–FFFF: Cartridge PRG ROM/RAM
     public byte[] Ram = new byte[2048];
 
+    private int read2002Counter = 0;
+
     public Memory(byte[] raw)
     {
         Raw = raw;
@@ -62,26 +64,63 @@ public class Memory
         Console.WriteLine($"Chr rom: {ChrRomSizeKb}KB");
     }
 
+    // Zero Page, X-indexed indirect: ($addr,X)
+    public ushort ReadIndirectX(byte zpAddr, byte x)
+    {
+        byte ptr = (byte)(zpAddr + x);
+        byte low = Read(ptr);
+        byte high = Read((byte)((ptr + 1) & 0xFF)); // Wrap around zero page
+        return (ushort)(low | (high << 8));
+    }
+
+    // Zero Page indirect, Y-indexed: ($addr),Y
+    public ushort ReadIndirectY(byte zpAddr, byte y, out byte low, out byte high, out ushort baseAddr)
+    {
+        low = Read(zpAddr);
+        high = Read((byte)((zpAddr + 1) & 0xFF)); // Wrap zero page
+        baseAddr = (ushort)(low | (high << 8));
+        return (ushort)(baseAddr + y);
+    }
+
     public byte Read(ushort address)
     {
         if (address < 0x2000)
         {
             return Ram[address % 0x800];
         }
-        else if (address >= 0x8000)
+
+        // Simulate PPU
+        if (address >= 0x2000 && address <= 0x3FFF)
+        {
+            ushort reg = (ushort)(address % 8);
+
+            switch (reg)
+            {
+                case 2: // PPUSTATUS
+                    read2002Counter++;
+
+                    // 0x80 for VBlank flag set
+                    if (read2002Counter > 5)
+                        return 0x80;
+                    else
+                        return 0x00;
+
+                default:
+                    return 0;
+            }
+        }
+
+        if (address >= 0x8000)
         {
             var offset = address - 0x8000;
 
             if (PrgRom.Length == 0x4000)
-                // Mirror 16 KB prg rom across 32 KB space
                 offset %= 0x4000;
 
             return PrgRom[offset];
         }
-        else
-        {
-            return 0; // stubbed for now
-        }
+
+        return 0;
     }
 
     public void Write(ushort address, byte value)
@@ -99,10 +138,6 @@ public class Memory
                 offset %= 0x4000;
 
             PrgRom[offset] = value;
-        }
-        else
-        {
-            // stubbed for now
         }
     }
 }
