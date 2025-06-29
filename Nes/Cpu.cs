@@ -916,7 +916,7 @@ public class Cpu(Memory memory)
     {
         N = (value & 0x80) != 0;
         V = (value & 0x40) != 0;
-        B = false; // never set by PLP or RTI
+        B = false; // Unused
         D = (value & 0x08) != 0;
         I = (value & 0x04) != 0;
         Z = (value & 0x02) != 0;
@@ -928,7 +928,7 @@ public class Cpu(Memory memory)
         byte status = 0;
         if (N) status |= 1 << 7;
         if (V) status |= 1 << 6;
-        status |= 1 << 5; // Unused flag is always set
+        status |= 1 << 5; // Unused
         if (breakFlag) status |= 1 << 4;
         if (D) status |= 1 << 3;
         if (I) status |= 1 << 2;

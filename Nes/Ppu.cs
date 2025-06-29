@@ -1,6 +1,6 @@
 namespace Nes;
 
-public class Ppu
+public class Ppu(string palettePath)
 {
     public uint[] Framebuffer = new uint[256 * 240]; // RGBA8888
     public bool FrameReady = false;
@@ -9,53 +9,66 @@ public class Ppu
 
     public byte Control;
     public bool NmiPending = false;
+    public bool VBlank = false;
 
-    private int cycle = 0;
-    private int scanline = 0;
+    public int Cycle = 0;
+    public int Scanline = 0;
 
-    private ushort v; // current vram address
-    private ushort t; // temp vram address
-    private byte x; // fine x scroll
-    private bool w; // write toggle (false = first write)
+    public ushort V; // current vram address
+    public ushort T; // temp vram address
+    public byte X; // fine x scroll
+    public bool W; // write toggle (false = first write)
 
     public byte[] ChrRom = [];
 
     public byte[] PaletteRam = new byte[32];
 
-    public static readonly uint[] NesBasePalette =
-    [
-        0x545454FF, 0x001E74FF, 0x081090FF, 0x300088FF, 0x440064FF, 0x5C0030FF, 0x540400FF, 0x3C1800FF,
-        0x202A00FF, 0x083A00FF, 0x004000FF, 0x003C28FF, 0x002840FF, 0x000000FF, 0x000000FF, 0x000000FF,
-        0x989698FF, 0x084CC4FF, 0x3032ECFF, 0x5C1EE4FF, 0x8814B0FF, 0xA01464FF, 0x982220FF, 0x783C00FF,
-        0x545A00FF, 0x287200FF, 0x087C00FF, 0x007628FF, 0x006678FF, 0x000000FF, 0x000000FF, 0x000000FF,
-        0xECEEEAFF, 0x4C9AECFF, 0x787CECFF, 0xB062ECFF, 0xE454ECFF, 0xEC58B4FF, 0xEC6A64FF, 0xD48820FF,
-        0xA0AA00FF, 0x74C400FF, 0x4CD020FF, 0x38CC6CFF, 0x38B4CCFF, 0x3C3C3CFF, 0x000000FF, 0x000000FF,
-        0xFCFCFCFF, 0xA8CCFCFF, 0xBCBCFCFF, 0xD4B2FCFF, 0xECA8FCFF, 0xF4ACD4FF, 0xF4B4B0FF, 0xF4C490FF,
-        0xECDC90FF, 0xD4E48CFF, 0xBCECACFF, 0xAEECCEFF, 0xAEECECFF, 0xAEAEAEFF, 0x000000FF, 0x000000FF
-    ];
+    public uint[] NesBasePalette = LoadNesPalette(palettePath);
 
-    private int read2002Counter = 0;
+    private static uint[] LoadNesPalette(string path)
+    {
+        byte[] raw = File.ReadAllBytes(path);
+
+        uint[] palette = new uint[64];
+        for (int i = 0; i < 64; i++)
+        {
+            byte r = raw[i * 3];
+            byte g = raw[i * 3 + 1];
+            byte b = raw[i * 3 + 2];
+            palette[i] = (uint)(0xFF << 24 | b << 16 | g << 8 | r);
+        }
+
+        return palette;
+    }
 
     public void Step()
     {
-        cycle++;
+        Cycle++;
 
-        if (cycle >= 341)
+        if (Cycle == 1)
         {
-            cycle = 0;
-            scanline++;
-
-            if (scanline == 241)
+            if (Scanline == 241)
             {
-                // Enter VBlank and trigger NMI
+                VBlank = true;
+
                 if ((Control & 0x80) != 0)
                     NmiPending = true;
             }
-
-            if (scanline >= 262)
+            else if (Scanline == 261)
             {
-                scanline = 0;
+                VBlank = false;
                 NmiPending = false;
+            }
+        }
+
+        if (Cycle >= 341)
+        {
+            Cycle = 0;
+            Scanline++;
+
+            if (Scanline >= 262)
+            {
+                Scanline = 0;
 
                 RenderBackground();
                 FrameReady = true;
@@ -65,55 +78,52 @@ public class Ppu
 
     public void RenderBackground()
     {
-        for (int row = 0; row < 30; row++)
+        int fineY = (V >> 12) & 0b111;
+        int coarseY = (V >> 5) & 0x1F;
+        int coarseXStart = V & 0b11111;
+        int nametable = (V >> 10) & 0b11;
+
+        for (int py = 0; py < 240; py++)
         {
-            for (int col = 0; col < 32; col++)
+            int yTile = (coarseY + (py + fineY) / 8) & 0x1F;
+            int fineYInTile = (py + fineY) % 8;
+
+            for (int px = 0; px < 256; px++)
             {
-                int tileIndex = Vram[0x2000 + row * 32 + col]; // nametable entry
-                byte[,] tile = DecodeTile(tileIndex);
+                int xScroll = px + X;
+                int xTile = (coarseXStart + xScroll / 8) & 0x1F;
+                int fineXInTile = xScroll % 8;
 
-                for (int y = 0; y < 8; y++)
-                {
-                    for (int x = 0; x < 8; x++)
-                    {
-                        byte pixelValue = tile[y, x]; // 0-3
+                int nameTableX = (coarseXStart + xScroll / 8) >> 5;
+                int nameTableY = (coarseY + (py + fineY) / 8) >> 5;
+                int selectedNametable = (nametable + nameTableY * 2 + nameTableX) & 0b11;
+                int nametableBase = 0x2000 + selectedNametable * 0x400;
 
-                        // Look up palette index from $3F00-$3F03
-                        byte paletteEntry = PaletteRam[0x00 + pixelValue]; // background palette 0
-                        uint color = NesBasePalette[paletteEntry]; // RGBA
+                int tileIndex = Vram[nametableBase + yTile * 32 + xTile];
+                byte[,] tile = GetTile(tileIndex);
 
-                        int px = col * 8 + x;
-                        int py = row * 8 + y;
+                int attributeAddr = nametableBase + 0x3C0 + (yTile / 4) * 8 + (xTile / 4);
+                byte attributeByte = Vram[attributeAddr];
+                int shift = ((yTile % 4) / 2) * 4 + ((xTile % 4) / 2) * 2;
+                int paletteIndex = (attributeByte >> shift) & 0b11;
 
-                        Framebuffer[py * 256 + px] = color;
-                    }
-                }
+                byte pixelValue = tile[fineYInTile, fineXInTile];
+                byte paletteEntry = pixelValue == 0
+                    ? PaletteRam[0]
+                    : PaletteRam[(paletteIndex * 4 + pixelValue) & 0x1F];
+
+                if ((paletteEntry & 0x13) == 0x10)
+                    paletteEntry &= 0x0F;
+
+                if (paletteEntry >= NesBasePalette.Length)
+                    paletteEntry = 0;
+
+                uint color = NesBasePalette[paletteEntry];
+                Framebuffer[py * 256 + px] = color;
             }
         }
 
         FrameReady = true;
-    }
-
-    public byte[,] DecodeTile(int index)
-    {
-        byte[,] pixels = new byte[8, 8];
-        int addr = index * 16;
-
-        for (int y = 0; y < 8; y++)
-        {
-            byte low = ChrRom[addr + y];
-            byte high = ChrRom[addr + y + 8];
-
-            for (int x = 0; x < 8; x++)
-            {
-                int bit = 7 - x;
-                byte bit0 = (byte)((low >> bit) & 1);
-                byte bit1 = (byte)((high >> bit) & 1);
-                pixels[y, x] = (byte)((bit1 << 1) | bit0); // 0-3
-            }
-        }
-
-        return pixels;
     }
 
     public byte[,] GetTile(int index)
@@ -124,8 +134,9 @@ public class Ppu
 
         for (int y = 0; y < 8; y++)
         {
-            byte low = ChrRom[baseAddr + y];
-            byte high = ChrRom[baseAddr + y + 8];
+            var tileSource = ChrRom.Length > 0 ? ChrRom : Vram;
+            byte low = tileSource[baseAddr + y];
+            byte high = tileSource[baseAddr + y + 8];
 
             for (int x = 0; x < 8; x++)
             {
@@ -143,22 +154,30 @@ public class Ppu
     {
         switch (reg)
         {
-            case 2: // Fake PPUSTATUS
-                read2002Counter++;
-
-                if (read2002Counter > 5)
-                    return 0x80;
-                else
-                    return 0x00;
+            case 2: // $2002 - PPUSTATUS
+                byte status = 0;
+                if (VBlank) status |= 0x80;
+                W = false;
+                VBlank = false;
+                return status;
 
             case 7:
                 byte result;
-                if (v >= 0x3F00)
-                    result = PaletteRam[v % 32];
-                else
-                    result = Vram[v];
+                int addr = V & 0x3FFF;
 
-                v += (ushort)((Control & 0x04) != 0 ? 32 : 1);
+                if (addr >= 0x3F00 && addr < 0x4000)
+                {
+                    int paletteAddr = addr & 0x1F;
+                    if ((paletteAddr & 0x13) == 0x10)
+                        paletteAddr &= 0x0F;
+                    result = PaletteRam[paletteAddr];
+                }
+                else
+                {
+                    result = Vram[addr];
+                }
+
+                V += (ushort)((Control & 0x04) != 0 ? 32 : 1);
                 return result;
         }
 
@@ -167,55 +186,59 @@ public class Ppu
 
     public void WriteRegister(ushort reg, byte value)
     {
-        //Console.WriteLine($"Ppu write @ {reg:X4} = {value}");
-
         switch (reg)
         {
-            case 0: // $2000 - Control
+            case 0: // $2000
                 Control = value;
-                t = (ushort)((t & 0xF3FF) | ((value & 0b11) << 10)); // bits 0-1 -> nametable select
+                T = (ushort)((T & 0xF3FF) | ((value & 0b11) << 10));
                 break;
 
             case 5: // $2005 - Scroll
-                if (!w)
+                if (!W)
                 {
-                    x = (byte)(value & 0b111); // fine x scroll
-                    t = (ushort)((t & 0xFFE0) | (value >> 3)); // coarse x
-                    w = true;
+                    X = (byte)(value & 0b111);
+                    T = (ushort)((T & 0xFFE0) | (value >> 3));
+                    W = true;
                 }
                 else
                 {
-                    t = (ushort)((t & 0x8FFF) | ((value & 0b111) << 12)); // fine y
-                    t = (ushort)((t & 0xFC1F) | ((value & 0xF8) << 2)); // coarse y
-                    w = false;
+                    T = (ushort)((T & 0x8FFF) | ((value & 0b111) << 12));
+                    T = (ushort)((T & 0xFC1F) | ((value & 0xF8) << 2));
+                    W = false;
                 }
-
                 break;
 
             case 6: // $2006 - set address
-                //Console.WriteLine($"$2006 write: {(w ? "low" : "high")} = {value:X2}");
-                if (!w)
+                if (!W)
                 {
-                    t = (ushort)((t & 0x00FF) | ((value & 0x3F) << 8));
-                    w = true;
+                    T = (ushort)((T & 0x00FF) | ((value & 0x3F) << 8));
+                    W = true;
                 }
                 else
                 {
-                    t = (ushort)((t & 0xFF00) | value);
-                    v = t;
-                    w = false;
+                    T = (ushort)((T & 0xFF00) | value);
+                    V = T;
+                    W = false;
                 }
                 break;
 
-            case 7: // $2007 - write data to v
-                //Console.WriteLine($"$2007 write to {v:X4} = {value:X2}");
-                if (v >= 0x3F00 && v <= 0x3FFF)
-                    PaletteRam[v % 32] = value;
-                else
-                    Vram[v % Vram.Length] = value;
+            case 7:
+                V &= 0x3FFF;
+                int addr = V & 0x3FFF;
 
-                // Auto increment v by 1 or 32 depending on bit 2 of $2000
-                v += (ushort)((Control & 0x04) != 0 ? 32 : 1);
+                if (addr >= 0x3F00 && addr < 0x4000)
+                {
+                    int paletteAddr = addr & 0x1F;
+                    if ((paletteAddr & 0x13) == 0x10)
+                        paletteAddr &= 0x0F;
+                    PaletteRam[paletteAddr] = value;
+                }
+                else
+                {
+                    Vram[addr % Vram.Length] = value;
+                }
+
+                V += (ushort)((Control & 0x04) != 0 ? 32 : 1);
                 break;
         }
     }

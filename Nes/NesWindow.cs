@@ -1,6 +1,7 @@
 using OpenTK.Windowing.Desktop;
 using OpenTK.Mathematics;
 using OpenTK.Graphics.OpenGL4;
+using OpenTK.Windowing.GraphicsLibraryFramework;
 
 namespace Nes;
 
@@ -12,7 +13,10 @@ public class NesWindow : GameWindow
 
     private Ppu ppu;
 
-    public NesWindow(Ppu ppu) : base(
+    private Controller controller1;
+    private Controller controller2;
+
+    public NesWindow(Ppu ppu, Controller controller1, Controller controller2) : base(
         GameWindowSettings.Default,
         new NativeWindowSettings
         {
@@ -21,6 +25,8 @@ public class NesWindow : GameWindow
         })
     {
         this.ppu = ppu;
+        this.controller1 = controller1;
+        this.controller2 = controller2;
     }
 
     protected override void OnLoad()
@@ -114,6 +120,19 @@ public class NesWindow : GameWindow
     protected override void OnRenderFrame(OpenTK.Windowing.Common.FrameEventArgs args)
     {
         base.OnRenderFrame(args);
+
+        var input = KeyboardState;
+
+        controller1.SetButtons(
+            a: input.IsKeyDown(Keys.Z),
+            b: input.IsKeyDown(Keys.X),
+            select: input.IsKeyDown(Keys.RightShift),
+            start: input.IsKeyDown(Keys.Enter),
+            up: input.IsKeyDown(Keys.Up) || input.IsKeyDown(Keys.W),
+            down: input.IsKeyDown(Keys.Down) || input.IsKeyDown(Keys.S),
+            left: input.IsKeyDown(Keys.Left) || input.IsKeyDown(Keys.A),
+            right: input.IsKeyDown(Keys.Right) || input.IsKeyDown(Keys.D)
+        );
 
         if (ppu.FrameReady)
         {

@@ -29,10 +29,15 @@ public class Memory
 
     public Ppu Ppu;
 
-    public Memory(byte[] raw, Ppu ppu)
+    public Controller Controller1;
+    public Controller Controller2;
+
+    public Memory(byte[] raw, Ppu ppu, Controller controller1, Controller controller2)
     {
         Raw = raw;
         Ppu = ppu;
+        Controller1 = controller1;
+        Controller2 = controller2;
 
         Console.WriteLine($"Prg rom size: {PrgRomSizeKb}KB");
         Console.WriteLine($"Chr rom size: {ChrRomSizeKb}KB");
@@ -65,7 +70,6 @@ public class Memory
         Console.WriteLine($"Chr rom: {ChrRomSizeKb}KB");
     }
 
-    // Zero Page, X-indexed indirect: ($addr,X)
     public ushort ReadIndirectX(byte zpAddr, byte x)
     {
         byte ptr = (byte)(zpAddr + x);
@@ -74,7 +78,6 @@ public class Memory
         return (ushort)(low | (high << 8));
     }
 
-    // Zero Page indirect, Y-indexed: ($addr),Y
     public ushort ReadIndirectY(byte zpAddr, byte y, out byte low, out byte high, out ushort baseAddr)
     {
         low = Read(zpAddr);
@@ -85,6 +88,11 @@ public class Memory
 
     public byte Read(ushort address)
     {
+        if (address == 0x4016)
+            return Controller1.Read();
+        if (address == 0x4017)
+            return Controller2.Read();
+
         if (address < 0x2000)
             return Ram[address % 0x800];
 
@@ -105,6 +113,12 @@ public class Memory
 
     public void Write(ushort address, byte value)
     {
+        if (address == 0x4016)
+        {
+            Controller1.Write(value);
+            Controller2.Write(value);
+        }
+
         if (address < 0x2000)
         {
             Ram[address % 0x800] = value;
