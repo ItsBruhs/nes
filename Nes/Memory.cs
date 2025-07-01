@@ -8,7 +8,7 @@ public class Memory
     public int PrgRomSizeKb => Raw[4] * 16;
     public int ChrRomSizeKb => Raw[5] * 8;
     public bool HasTrainer => (Raw[6] & 0b00000100) != 0;
-    public int Mapper => (Raw[6] >> 4) | (Raw[7] & 0xF0);
+    public int MapperId => (Raw[6] >> 4) | (Raw[7] & 0xF0);
     public bool VerticalMirroring => (Raw[6] & 0b00000001) != 0;
     public bool BatteryBacked => (Raw[6] & 0b00000010) != 0;
 
@@ -27,10 +27,12 @@ public class Memory
     // 4020–FFFF: Cartridge PRG ROM/RAM
     public byte[] Ram = new byte[2048];
 
-    public Ppu Ppu;
+    public Mapper Mapper;
 
-    public Controller Controller1;
-    public Controller Controller2;
+    private Ppu Ppu;
+
+    private Controller Controller1;
+    private Controller Controller2;
 
     public Memory(byte[] raw, Ppu ppu, Controller controller1, Controller controller2)
     {
@@ -42,7 +44,7 @@ public class Memory
         Console.WriteLine($"Prg rom size: {PrgRomSizeKb}KB");
         Console.WriteLine($"Chr rom size: {ChrRomSizeKb}KB");
         Console.WriteLine($"Has trainer: {HasTrainer}");
-        Console.WriteLine($"Mapper: {Mapper}");
+        Console.WriteLine($"Mapper: {MapperId}");
         Console.WriteLine($"Vertical mirroring: {VerticalMirroring}");
         Console.WriteLine($"Battery backed: {BatteryBacked}");
 
@@ -52,11 +54,6 @@ public class Memory
         {
             Trainer = raw.Skip(offset).Take(512).ToArray();
             offset += 512;
-            Console.WriteLine("Trainer found");
-        }
-        else
-        {
-            Console.WriteLine("No trainer");
         }
 
         PrgRom = raw.Skip(offset).Take(1024 * PrgRomSizeKb).ToArray();
@@ -66,8 +63,12 @@ public class Memory
 
         ChrRom = raw.Skip(offset).Take(1024 * ChrRomSizeKb).ToArray();
 
-        Console.WriteLine($"Prg rom: {PrgRomSizeKb}KB");
-        Console.WriteLine($"Chr rom: {ChrRomSizeKb}KB");
+        Mapper = MapperId switch
+        {
+            0 => new Mapper0Nrom(PrgRom, ChrRom),
+            4 => new Mapper4Mmc3(PrgRom, ChrRom),
+            _ => throw new NotSupportedException($"Mapper {MapperId} not supported")
+        };
     }
 
     public ushort ReadIndirectX(byte zpAddr, byte x)
@@ -99,14 +100,8 @@ public class Memory
         if (address >= 0x2000 && address <= 0x3FFF)
             return Ppu.ReadRegister((ushort)(address % 8)); // $2000–$2007 mirrored
 
-        if (address >= 0x8000)
-        {
-            var offset = address - 0x8000;
-            if (PrgRom.Length == 0x4000)
-                offset %= 0x4000;
-
-            return PrgRom[offset];
-        }
+        if (address >= 0x6000)
+            return Mapper.CpuRead(address);
 
         return 0;
     }
@@ -127,9 +122,9 @@ public class Memory
         {
             Ppu.WriteRegister((ushort)(address % 8), value);
         }
-        else if (address >= 0x8000)
+        else if (address >= 0x6000)
         {
-            Console.WriteLine($"Attempted to write to prg rom @ {address:X4}");
+            Mapper.CpuWrite(address, value);
         }
     }
 }

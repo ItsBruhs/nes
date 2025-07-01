@@ -33,19 +33,19 @@ public class Cpu(Memory memory)
     }
 
     // Registers
-    public byte A, X, Y, SP, P;
+    private byte A, X, Y, SP, P;
 
     // Flags
-    public bool C, Z, I, D, B, V, N;
+    private bool C, Z, I, D, B, V, N;
 
     // Program counter
-    public ushort PC;
+    private ushort PC;
 
-    public Memory Memory = memory;
+    private Memory Memory = memory;
 
-    public bool PrintLog = false;
+    private bool PrintLog = false;
 
-    public string InstructionLog = "";
+    private string InstructionLog = "";
 
     private Dictionary<byte, Instruction> _instructionTable = [];
 
@@ -100,6 +100,7 @@ public class Cpu(Memory memory)
             [0xDA] = new("*NOP", AddressingMode.Immediate, null, () => LogInstruction((ushort)(PC - 1), 0xDA, "*NOP")),
             [0xFA] = new("*NOP", AddressingMode.Immediate, null, () => LogInstruction((ushort)(PC - 1), 0xFA, "*NOP")),
             [0x80] = new("*NOP", AddressingMode.Immediate, addr => { }),
+            [0x82] = new("*NOP", AddressingMode.Immediate, addr => { }),
             [0x04] = new("*NOP", AddressingMode.ZeroPage, addr => { }),
             [0x44] = new("*NOP", AddressingMode.ZeroPage, addr => { }),
             [0x64] = new("*NOP", AddressingMode.ZeroPage, addr => { }),
@@ -405,6 +406,9 @@ public class Cpu(Memory memory)
     public void Step()
     {
         byte opcode = Memory.Read(PC++);
+
+        if (opcode == 0)
+            return;
 
         if (!_instructionTable.TryGetValue(opcode, out var instr))
             throw new NotImplementedException($"Unimplemented opcode: {opcode:X2} @ {PC:X4}");
@@ -937,7 +941,7 @@ public class Cpu(Memory memory)
         return status;
     }
 
-    public void LogInstruction(ushort pc, ushort opcode, string instruction, params ushort[] operands)
+    private void LogInstruction(ushort pc, ushort opcode, string instruction, params ushort[] operands)
     {
         if (!PrintLog)
             return;
@@ -948,5 +952,5 @@ public class Cpu(Memory memory)
         InstructionLog += text + Environment.NewLine;
     }
 
-    public string GetRegisters() => $"A:{A:X2} X:{X:X2} Y:{Y:X2} P:{P:X2} SP:{SP:X2}";
+    private string GetRegisters() => $"A:{A:X2} X:{X:X2} Y:{Y:X2} P:{P:X2} SP:{SP:X2}";
 }

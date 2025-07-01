@@ -15,10 +15,11 @@ var bytes = File.ReadAllBytes(filePath);
 
 Console.WriteLine($"Loading file: {filePath}");
 
-var ppu = new Ppu("./Nes/2C02G_wiki.pal");
+var ppu = new Ppu();
 var controller1 = new Controller();
 var controller2 = new Controller();
 var memory = new Memory(bytes, ppu, controller1, controller2);
+ppu.Mapper = memory.Mapper;
 ppu.ChrRom = memory.ChrRom;
 var cpu = new Cpu(memory);
 //cpu.PrintLog = true;
@@ -42,9 +43,9 @@ var cpuThread = Task.Run(() =>
         if (ppu.FrameReady)
         {
             frames++;
-            /* var elapsed = sw.ElapsedMilliseconds;
+            var elapsed = sw.ElapsedMilliseconds;
             if (elapsed < frames * (1000 / 60))
-                Thread.Sleep((int)(frames * (1000 / 60) - elapsed)); */
+                Thread.Sleep((int)(frames * (1000 / 60) - elapsed));
         }
 
         if (ppu.NmiPending)

@@ -1,45 +1,43 @@
 namespace Nes;
 
-public class Ppu(string palettePath)
+public class Ppu
 {
     public uint[] Framebuffer = new uint[256 * 240]; // RGBA8888
     public bool FrameReady = false;
 
-    public byte[] Vram = new byte[0x4000];
+    private byte[] Vram = new byte[0x4000];
 
-    public byte Control;
+    private byte Control;
     public bool NmiPending = false;
-    public bool VBlank = false;
+    private bool VBlank = false;
 
-    public int Cycle = 0;
-    public int Scanline = 0;
+    private int Cycle = 0;
+    private int Scanline = 0;
 
-    public ushort V; // current vram address
-    public ushort T; // temp vram address
-    public byte X; // fine x scroll
-    public bool W; // write toggle (false = first write)
+    public Mapper? Mapper;
+
+    private ushort V; // current vram address
+    private ushort T; // temp vram address
+    private byte X; // fine x scroll
+    private bool W; // write toggle (false = first write)
 
     public byte[] ChrRom = [];
 
-    public byte[] PaletteRam = new byte[32];
+    private byte[] PaletteRam = new byte[32];
 
-    public uint[] NesBasePalette = LoadNesPalette(palettePath);
-
-    private static uint[] LoadNesPalette(string path)
-    {
-        byte[] raw = File.ReadAllBytes(path);
-
-        uint[] palette = new uint[64];
-        for (int i = 0; i < 64; i++)
-        {
-            byte r = raw[i * 3];
-            byte g = raw[i * 3 + 1];
-            byte b = raw[i * 3 + 2];
-            palette[i] = (uint)(0xFF << 24 | b << 16 | g << 8 | r);
-        }
-
-        return palette;
-    }
+    private uint[] NesBasePalette =
+    [
+        0xFF626262, 0xFF951C00, 0xFFAC0419, 0xFF9D0042, 0xFF6B0061, 0xFF25006E, 0xFF000565,
+        0xFF001E49, 0xFF003722, 0xFF004900, 0xFF004F00, 0xFF164800, 0xFF5E3500, 0xFF000000,
+        0xFF000000, 0xFF000000, 0xFFABABAB, 0xFFDB4E0C, 0xFFFF2E3D, 0xFFF31571, 0xFFB90B9B,
+        0xFF6212B0, 0xFF0427A9, 0xFF004689, 0xFF006657, 0xFF007F23, 0xFF008900, 0xFF328300,
+        0xFF906D00, 0xFF000000, 0xFF000000, 0xFF000000, 0xFFFFFFFF, 0xFFFFA557, 0xFFFF8782,
+        0xFFFF6DB4, 0xFFFF60DF, 0xFFC663F8, 0xFF6D74F8, 0xFF2090DE, 0xFF00AEB3, 0xFF00C881,
+        0xFF22D556, 0xFF6FD33D, 0xFFC8C13E, 0xFF4E4E4E, 0xFF000000, 0xFF000000, 0xFFFFFFFF,
+        0xFFFFE0BE, 0xFFFFD4CD, 0xFFFFCAE0, 0xFFFFC4F1, 0xFFEFC4FC, 0xFFCECAFD, 0xFFAFD4F5,
+        0xFF9CDFE6, 0xFF9AE9D3, 0xFFA8EFC2, 0xFFC4EFB7, 0xFFE5EAB6, 0xFFB8B8B8, 0xFF000000,
+        0xFF000000
+    ];
 
     public void Step()
     {
@@ -73,6 +71,12 @@ public class Ppu(string palettePath)
                 RenderBackground();
                 FrameReady = true;
             }
+
+            if (Scanline < 240)
+            {
+                if (Mapper is Mapper4Mmc3 m4)
+                    m4.ClockScanline();
+            }
         }
     }
 
@@ -98,11 +102,13 @@ public class Ppu(string palettePath)
                 int nameTableY = (coarseY + (py + fineY) / 8) >> 5;
                 int selectedNametable = (nametable + nameTableY * 2 + nameTableX) & 0b11;
                 int nametableBase = 0x2000 + selectedNametable * 0x400;
+                //nametableBase &= 0x0FFF;
 
                 int tileIndex = Vram[nametableBase + yTile * 32 + xTile];
                 byte[,] tile = GetTile(tileIndex);
 
                 int attributeAddr = nametableBase + 0x3C0 + (yTile / 4) * 8 + (xTile / 4);
+                attributeAddr %= Vram.Length;
                 byte attributeByte = Vram[attributeAddr];
                 int shift = ((yTile % 4) / 2) * 4 + ((xTile % 4) / 2) * 2;
                 int paletteIndex = (attributeByte >> shift) & 0b11;
@@ -134,9 +140,8 @@ public class Ppu(string palettePath)
 
         for (int y = 0; y < 8; y++)
         {
-            var tileSource = ChrRom.Length > 0 ? ChrRom : Vram;
-            byte low = tileSource[baseAddr + y];
-            byte high = tileSource[baseAddr + y + 8];
+            byte low = Mapper!.PpuRead((ushort)(baseAddr + y));
+            byte high = Mapper.PpuRead((ushort)(baseAddr + y + 8));
 
             for (int x = 0; x < 8; x++)
             {
