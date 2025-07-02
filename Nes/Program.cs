@@ -16,9 +16,11 @@ var bytes = File.ReadAllBytes(filePath);
 Console.WriteLine($"Loading file: {filePath}");
 
 var ppu = new Ppu();
+var apu = new Apu();
 var controller1 = new Controller();
 var controller2 = new Controller();
-var memory = new Memory(bytes, ppu, controller1, controller2);
+var memory = new Memory(bytes, ppu, apu, controller1, controller2);
+apu.Memory = memory;
 ppu.Mapper = memory.Mapper;
 ppu.ChrRom = memory.ChrRom;
 var cpu = new Cpu(memory);
@@ -39,13 +41,18 @@ var cpuThread = Task.Run(() =>
         cpu.Step();
         for (int i = 0; i < 3; i++)
             ppu.Step();
+        apu.Step();
 
         if (ppu.FrameReady)
         {
             frames++;
             var elapsed = sw.ElapsedMilliseconds;
-            if (elapsed < frames * (1000 / 60))
-                Thread.Sleep((int)(frames * (1000 / 60) - elapsed));
+            double expected = frames * (1000.0 / 60.0);
+            double speed = expected > 0 ? (expected / Math.Max(elapsed, 1)) : 1.0;
+            window.EmulationSpeed = speed;
+
+            if (elapsed < expected)
+                Thread.Sleep((int)(expected - elapsed));
         }
 
         if (ppu.NmiPending)
@@ -57,3 +64,4 @@ var cpuThread = Task.Run(() =>
 });
 
 window.Run();
+apu.Dispose();

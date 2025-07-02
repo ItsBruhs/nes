@@ -30,14 +30,16 @@ public class Memory
     public Mapper Mapper;
 
     private Ppu Ppu;
+    private Apu Apu;
 
     private Controller Controller1;
     private Controller Controller2;
 
-    public Memory(byte[] raw, Ppu ppu, Controller controller1, Controller controller2)
+    public Memory(byte[] raw, Ppu ppu, Apu apu, Controller controller1, Controller controller2)
     {
         Raw = raw;
         Ppu = ppu;
+        Apu = apu;
         Controller1 = controller1;
         Controller2 = controller2;
 
@@ -121,6 +123,10 @@ public class Memory
         else if (address >= 0x2000 && address <= 0x3FFF)
         {
             Ppu.WriteRegister((ushort)(address % 8), value);
+        }
+        else if (address >= 0x4000 && address <= 0x4017)
+        {
+            Apu.Write(address, value);
         }
         else if (address >= 0x6000)
         {

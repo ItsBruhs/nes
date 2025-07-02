@@ -12,6 +12,7 @@ public class NesWindow : GameWindow
     private int textureId;
 
     private Ppu ppu;
+    public double EmulationSpeed;
 
     private Controller controller1;
     private Controller controller2;
@@ -120,6 +121,8 @@ public class NesWindow : GameWindow
     protected override void OnRenderFrame(OpenTK.Windowing.Common.FrameEventArgs args)
     {
         base.OnRenderFrame(args);
+
+        Title = $"NES Emulator ({Math.Min(EmulationSpeed, 1.0) * 100.0:F1}%)";
 
         var input = KeyboardState;
 
