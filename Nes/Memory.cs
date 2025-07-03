@@ -68,6 +68,7 @@ public class Memory
         Mapper = MapperId switch
         {
             0 => new Mapper0Nrom(PrgRom, ChrRom),
+            2 => new Mapper2UxRom(PrgRom, ChrRom),
             4 => new Mapper4Mmc3(PrgRom, ChrRom),
             _ => throw new NotSupportedException($"Mapper {MapperId} not supported")
         };
