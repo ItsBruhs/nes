@@ -5,7 +5,7 @@ var cmdArgs = Environment.GetCommandLineArgs();
 
 if (cmdArgs.Length < 2)
 {
-    Console.WriteLine("No input file provided");
+    Console.WriteLine("No input file provided (it should be passed as command line arg)");
     Console.ReadLine();
     return;
 }
